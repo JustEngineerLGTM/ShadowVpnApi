@@ -34,3 +34,4 @@ C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0\ShadowVPNApi.pdb
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0\ShadowVPNApi.genruntimeconfig.cache
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0\ref\ShadowVPNApi.dll
+C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0\ShadowVPNApi.sourcelink.json

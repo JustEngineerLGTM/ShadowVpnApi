@@ -1,32 +1,50 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.OpenApi.Models;
 using System.Diagnostics;
 using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Добавьте Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    // Настройка Swagger (опционально)
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShadowVPN API", Version = "v1" });
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Использование Swagger в режиме разработки
 if (app.Environment.IsDevelopment())
 {
-    app.MapSwagger();
-    app.UseSwaggerUI();
+    app.UseSwagger(); // Подключаем Swagger
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ShadowVPN API v1"); // Указываем путь до Swagger UI
+        options.RoutePrefix = string.Empty; // Делает Swagger UI доступным по корневому URL
+    });
 }
 
 app.UseHttpsRedirection();
 
-// Эндпоинт для создания пользователя OpenVPN
+// API для создания нового VPN пользователя
 app.MapPost("/createvpnuser", async (string username) =>
 {
     var result = await CreateVpnUserAsync(username);
     return result != null ? Results.Ok(result) : Results.BadRequest("Error creating VPN user.");
-});
+})
+.WithName("CreateVpnUser");
 
-// Логика создания пользователя
+// API для получения конфигурации по имени пользователя
+app.MapGet("/getvpnconfig", async (string username) =>
+{
+    var config = await GetVpnConfigAsync(username);
+    return config != null ? Results.Ok(config) : Results.NotFound($"Config for user {username} not found.");
+})
+.WithName("GetVpnConfig");
+
+
+// Логика создания нового пользователя и сертификатов
 async Task<string?> CreateVpnUserAsync(string username)
 {
     try
@@ -89,6 +107,25 @@ async Task<string?> CreateVpnUserAsync(string username)
         // Записываем конфиг в файл
         await File.WriteAllTextAsync(certPath, configContent);
         return certPath;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Exception: {ex.Message}");
+        return null;
+    }
+}
+
+// Логика для получения конфигурации по пользователю
+async Task<string?> GetVpnConfigAsync(string username)
+{
+    try
+    {
+        string configPath = Path.Combine("/etc/openvpn/clients", $"{username}.ovpn");
+        if (File.Exists(configPath))
+        {
+            return await File.ReadAllTextAsync(configPath);
+        }
+        return null;
     }
     catch (Exception ex)
     {
