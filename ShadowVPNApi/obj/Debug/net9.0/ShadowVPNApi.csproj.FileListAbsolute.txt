@@ -34,3 +34,4 @@ C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Debug\net9.0\r
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\bin\Debug\net9.0\Swashbuckle.AspNetCore.Swagger.dll
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\bin\Debug\net9.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\bin\Debug\net9.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Debug\net9.0\ShadowVPNApi.sourcelink.json
