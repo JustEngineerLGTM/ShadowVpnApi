@@ -39,87 +39,65 @@ app.MapGet("/getvpnconfig", async (string username) =>
 
 async Task<string?> CreateVpnUserAsync(string username)
 {
-    try
+    return await Task.Run(() =>
     {
-        string easyRsaPath = "/root/openvpn-ca";
-        string outputPath = "/etc/openvpn/clients";
-
-        if (!Directory.Exists(outputPath))
+        try
         {
-            Directory.CreateDirectory(outputPath);
-        }
+            string scriptPath = "/root/openvpn-ca/create_vpn_user.sh";
+            string outputPath = "/etc/openvpn/clients";
 
-        string command = $"echo \"\" | EASYRSA_BATCH=1 {easyRsaPath}/easyrsa build-client-full {username} nopass";
-        Console.WriteLine($"Executing command: {command}");
-
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
+            if (!Directory.Exists(outputPath))
             {
-                FileName = "/bin/bash",
-                Arguments = $"-c \"{command}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardInput = false,
+                Directory.CreateDirectory(outputPath);
             }
-        };
 
-        process.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("[OUT] " + e.Data); };
-        process.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("[ERR] " + e.Data); };
+            string command = $"{scriptPath} {username}";
+            Console.WriteLine($"Executing script: {command}");
 
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = $"-c \"{command}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
 
-        if (!process.WaitForExit(30000))
+            process.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("[OUT] " + e.Data); };
+            process.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("[ERR] " + e.Data); };
+
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            if (!process.WaitForExit(30000))
+            {
+                process.Kill();
+                Console.WriteLine("ERROR: Process timeout.");
+                return null;
+            }
+
+            if (process.ExitCode != 0)
+            {
+                Console.WriteLine("ERROR: Certificate creation failed.");
+                return null;
+            }
+
+            string certPath = Path.Combine(outputPath, $"{username}.ovpn");
+            return certPath;
+        }
+        catch (Exception ex)
         {
-            process.Kill();
-            Console.WriteLine("ERROR: Process timeout.");
+            Console.WriteLine($"Exception: {ex.Message}");
             return null;
         }
-
-        if (process.ExitCode != 0)
-        {
-            Console.WriteLine("ERROR: Certificate creation failed.");
-            return null;
-        }
-
-        string certPath = Path.Combine(outputPath, $"{username}.ovpn");
-        string configContent = $"client\n" +
-                               $"dev tun\n" +
-                               $"proto udp\n" +
-                               $"remote 109.120.132.39 1194\n" +
-                               $"resolv-retry infinite\n" +
-                               $"nobind\n" +
-                               $"persist-key\n" +
-                               $"persist-tun\n\n" +
-                               $"<ca>\n" +
-                               $"{await File.ReadAllTextAsync("/etc/openvpn/ca.crt")}\n" +
-                               $"</ca>\n\n" +
-                               $"<cert>\n" +
-                               $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "issued", $"{username}.crt"))}\n" +
-                               $"</cert>\n\n" +
-                               $"<key>\n" +
-                               $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "private", $"{username}.key"))}\n" +
-                               $"</key>\n\n" +
-                               $"<tls-auth>\n" +
-                               $"{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n" +
-                               $"</tls-auth>\n" +
-                               $"cipher AES-256-CBC\n" +
-                               $"auth SHA256\n" +
-                               $"verb 3";
-
-        await File.WriteAllTextAsync(certPath, configContent);
-        return certPath;
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Exception: {ex.Message}");
-        return null;
-    }
+    });
 }
+
 
 async Task<string?> GetVpnConfigAsync(string username)
 {
