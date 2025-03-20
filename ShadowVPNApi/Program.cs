@@ -64,6 +64,7 @@ async Task<string?> CreateVpnUserAsync(string username)
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
+                    RedirectStandardInput = false,
                 }
             };
 
