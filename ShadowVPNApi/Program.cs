@@ -58,25 +58,23 @@ async Task<string?> CreateVpnUserAsync(string username)
         string outputPath = "/etc/openvpn/clients";
 
         if (!Directory.Exists(outputPath))
-        {
             Directory.CreateDirectory(outputPath);
-        }
 
-        // Record the exact command that works manually
-        string exactCommand = $"cd {easyRsaPath} && ./easyrsa build-client-full {username} nopass";
-        Console.WriteLine($"Executing command: {exactCommand}");
-
-        // Execute the exact same command you use manually
+        
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = "sudo",  // Use sudo to ensure it runs as root
-                Arguments = $"-u root /bin/bash -c \"{exactCommand}\"",
+                FileName = "/bin/bash",
+                Arguments = $"-c \"cd {easyRsaPath} && " +
+                            "source ./vars && " +  // Load EasyRSA environment
+                            "export EASYRSA_BATCH=1 EASYRSA_REQ_CN={username} && " +  // Batch mode + CN
+                            "./easyrsa build-client-full {username} nopass\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                WorkingDirectory = easyRsaPath  
             }
         };
 
