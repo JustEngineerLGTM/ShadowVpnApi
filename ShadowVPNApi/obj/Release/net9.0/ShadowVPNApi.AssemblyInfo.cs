@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ShadowVPNApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b0c873394bc93ded1156d1299246661cd9e17688")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+41d02ce31b402f45e5de2cb2d2ec1a3fe69e388c")]
 [assembly: System.Reflection.AssemblyProductAttribute("ShadowVPNApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ShadowVPNApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
