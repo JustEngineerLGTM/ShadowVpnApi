@@ -1,5 +1,6 @@
 ﻿using Microsoft.OpenApi.Models;
 using System.Diagnostics;
+using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,19 +29,19 @@ app.UseHttpsRedirection();
 
 // API для создания нового VPN пользователя
 app.MapPost("/createvpnuser", async (string username) =>
-    {
-        var result = await CreateVpnUserAsync(username);
-        return result != null ? Results.Ok(result) : Results.BadRequest("Error creating VPN user.");
-    })
-    .WithName("CreateVpnUser");
+{
+    var result = await CreateVpnUserAsync(username);
+    return result != null ? Results.Ok(result) : Results.BadRequest("Error creating VPN user.");
+})
+.WithName("CreateVpnUser");
 
 // API для получения конфигурации по имени пользователя
 app.MapGet("/getvpnconfig", async (string username) =>
-    {
-        var config = await GetVpnConfigAsync(username);
-        return config != null ? Results.Ok(config) : Results.NotFound($"Config for user {username} not found.");
-    })
-    .WithName("GetVpnConfig");
+{
+    var config = await GetVpnConfigAsync(username);
+    return config != null ? Results.Ok(config) : Results.NotFound($"Config for user {username} not found.");
+})
+.WithName("GetVpnConfig");
 
 
 // Логика создания нового пользователя и сертификатов
@@ -48,11 +49,16 @@ async Task<string?> CreateVpnUserAsync(string username)
 {
     try
     {
-        var easyRsaPath = "~/openvpn-ca/easy-rsa"; // Путь к EasyRSA
-        var outputPath = "/etc/openvpn/clients"; // Папка для сертификатов
+        string easyRsaPath = "/root/openvpn-ca/easyrsa"; 
+        string outputPath = "/etc/openvpn/clients";
 
-        // Проверяем наличие EasyRSA и создаём сертификат
-        var command = $"./easyrsa gen-req {username} nopass";
+        if (!Directory.Exists(outputPath))
+        {
+            Directory.CreateDirectory(outputPath);
+        }
+
+        // Генерация запроса на сертификат
+        string command = $"echo yes | ./easyrsa gen-req {username} nopass";
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -66,43 +72,72 @@ async Task<string?> CreateVpnUserAsync(string username)
             }
         };
 
+        process.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine(e.Data); };
+        process.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("ERROR: " + e.Data); };
+
         process.Start();
-        var error = await process.StandardError.ReadToEndAsync();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
         process.WaitForExit();
 
         if (process.ExitCode != 0)
         {
-            Console.WriteLine($"Error generating user: {error}");
+            Console.WriteLine("Ошибка создания запроса на сертификат.");
             return null;
         }
 
-        // Если сертификат создан, собираем путь к файлам
-        var certPath = Path.Combine(outputPath, $"{username}.ovpn");
-        var configContent = $"client\n" +
-                            $"dev tun\n" +
-                            $"proto udp\n" +
-                            $"remote YOUR_SERVER_IP 1194\n" +
-                            $"resolv-retry infinite\n" +
-                            $"nobind\n" +
-                            $"persist-key\n" +
-                            $"persist-tun\n\n" +
-                            $"<ca>\n" +
-                            $"{await File.ReadAllTextAsync("/etc/openvpn/ca.crt")}\n" +
-                            $"</ca>\n\n" +
-                            $"<cert>\n" +
-                            $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "issued", $"{username}.crt"))}\n" +
-                            $"</cert>\n\n" +
-                            $"<key>\n" +
-                            $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "private", $"{username}.key"))}\n" +
-                            $"</key>\n\n" +
-                            $"<tls-auth>\n" +
-                            $"{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n" +
-                            $"</tls-auth>\n" +
-                            $"cipher AES-256-CBC\n" +
-                            $"auth SHA256\n" +
-                            $"verb 3";
+        // Подписание сертификата
+        string signCommand = $"echo yes | ./easyrsa sign-req client {username}";
+        var signProcess = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "bash",
+                Arguments = $"-c \"cd {easyRsaPath} && {signCommand}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        };
 
-        // Записываем конфиг в файл
+        signProcess.Start();
+        signProcess.BeginOutputReadLine();
+        signProcess.BeginErrorReadLine();
+        signProcess.WaitForExit();
+
+        if (signProcess.ExitCode != 0)
+        {
+            Console.WriteLine("Ошибка подписания сертификата.");
+            return null;
+        }
+
+        // Генерация конфигурации
+        string certPath = Path.Combine(outputPath, $"{username}.ovpn");
+        string configContent = $"client\n" +
+                               $"dev tun\n" +
+                               $"proto udp\n" +
+                               $"remote YOUR_SERVER_IP 1194\n" +
+                               $"resolv-retry infinite\n" +
+                               $"nobind\n" +
+                               $"persist-key\n" +
+                               $"persist-tun\n\n" +
+                               $"<ca>\n" +
+                               $"{await File.ReadAllTextAsync("/etc/openvpn/ca.crt")}\n" +
+                               $"</ca>\n\n" +
+                               $"<cert>\n" +
+                               $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "issued", $"{username}.crt"))}\n" +
+                               $"</cert>\n\n" +
+                               $"<key>\n" +
+                               $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "private", $"{username}.key"))}\n" +
+                               $"</key>\n\n" +
+                               $"<tls-auth>\n" +
+                               $"{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n" +
+                               $"</tls-auth>\n" +
+                               $"cipher AES-256-CBC\n" +
+                               $"auth SHA256\n" +
+                               $"verb 3";
+
         await File.WriteAllTextAsync(certPath, configContent);
         return certPath;
     }
@@ -113,13 +148,17 @@ async Task<string?> CreateVpnUserAsync(string username)
     }
 }
 
+
 // Логика для получения конфигурации по пользователю
 async Task<string?> GetVpnConfigAsync(string username)
 {
     try
     {
-        var configPath = Path.Combine("/etc/openvpn/clients", $"{username}.ovpn");
-        if (File.Exists(configPath)) return await File.ReadAllTextAsync(configPath);
+        string configPath = Path.Combine("/etc/openvpn/clients", $"{username}.ovpn");
+        if (File.Exists(configPath))
+        {
+            return await File.ReadAllTextAsync(configPath);
+        }
         return null;
     }
     catch (Exception ex)
