@@ -1,5 +1,7 @@
 ﻿using Microsoft.OpenApi.Models;
-using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,7 +9,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    // Настройка Swagger (опционально)
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShadowVPN API", Version = "v1" });
 });
 
@@ -16,133 +17,82 @@ var app = builder.Build();
 // Использование Swagger в режиме разработки
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger(); // Подключаем Swagger
+    app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ShadowVPN API v1"); // Указываем путь до Swagger UI
-        options.RoutePrefix = string.Empty; // Делает Swagger UI доступным по корневому URL
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ShadowVPN API v1");
+        options.RoutePrefix = string.Empty;
     });
 }
 
 app.UseHttpsRedirection();
 
-// API для создания нового VPN пользователя
 app.MapPost("/createvpnuser", async (string username) =>
 {
     var result = await CreateVpnUserAsync(username);
     return result != null ? Results.Ok(result) : Results.BadRequest("Error creating VPN user.");
-})
-.WithName("CreateVpnUser");
+}).WithName("CreateVpnUser");
 
-// API для получения конфигурации по имени пользователя
 app.MapGet("/getvpnconfig", async (string username) =>
 {
     var config = await GetVpnConfigAsync(username);
     return config != null ? Results.Ok(config) : Results.NotFound($"Config for user {username} not found.");
-})
-.WithName("GetVpnConfig");
+}).WithName("GetVpnConfig");
 
-
-// Логика создания нового пользователя и сертификатов
 async Task<string?> CreateVpnUserAsync(string username)
 {
     try
     {
-        string easyRsaPath = "/root/openvpn-ca";  
         string outputPath = "/etc/openvpn/clients";
-
         if (!Directory.Exists(outputPath))
         {
             Directory.CreateDirectory(outputPath);
         }
 
-        // Команда для генерации и подписания сертификата
-        string command = $"EASYRSA_BATCH=1 ./easyrsa --batch build-client-full {username} nopass";
-        var processStartInfo = new ProcessStartInfo
+        using (RSA rsa = RSA.Create(2048))
         {
-            FileName = "bash",
-            Arguments = $"-c \"cd {easyRsaPath} && {command}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
+            var certRequest = new CertificateRequest($"CN={username}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            DateTime notBefore = DateTime.UtcNow;
+            DateTime notAfter = notBefore.AddYears(1);
 
-        // Логируем запуск процесса
-        Console.WriteLine($"Запуск команды: {command}");
+            string caCertPath = "/etc/openvpn/ca.crt";
+            string caKeyPath = "/etc/openvpn/ca.key";
 
-        using (var process = Process.Start(processStartInfo))
-        {
-            if (process == null)
-            {
-                Console.WriteLine("Не удалось запустить процесс.");
-                return null;
-            }
+            // Загрузка сертификата CA через X509CertificateLoader
+            X509Certificate2 caCert = LoadCertificate(caCertPath);
+            RSA caKey = LoadPrivateKey(caKeyPath);
 
-            // Логируем стандартный вывод
-            process.OutputDataReceived += (sender, e) =>
-            {
-                if (!string.IsNullOrEmpty(e.Data))
-                {
-                    Console.WriteLine($"Output: {e.Data}");
-                }
-            };
+            // Создание и подписание клиентского сертификата
+            X509Certificate2 clientCert = certRequest.Create(caCert, notBefore, notAfter, Guid.NewGuid().ToByteArray());
+            var signedClientCert = clientCert.CopyWithPrivateKey(caKey);
 
-            // Логируем ошибки
-            process.ErrorDataReceived += (sender, e) =>
-            {
-                if (!string.IsNullOrEmpty(e.Data))
-                {
-                    Console.WriteLine($"Error: {e.Data}");
-                }
-            };
+            // Сохраняем сертификат и ключ клиента
+            string certPath = Path.Combine(outputPath, $"{username}.crt");
+            string keyPath = Path.Combine(outputPath, $"{username}.key");
+            File.WriteAllText(certPath, ExportCertificateToPem(signedClientCert));
+            File.WriteAllText(keyPath, ExportPrivateKeyToPem(rsa));
 
-            // Начинаем считывание данных из потоков
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+            // Генерация конфигурации OpenVPN
+            string configContent = $"client\n" +
+                                   $"dev tun\n" +
+                                   $"proto udp\n" +
+                                   $"remote 109.120.132.39 1194\n" +
+                                   $"resolv-retry infinite\n" +
+                                   $"nobind\n" +
+                                   $"persist-key\n" +
+                                   $"persist-tun\n\n" +
+                                   $"<ca>\n{await File.ReadAllTextAsync(caCertPath)}\n</ca>\n\n" +
+                                   $"<cert>\n{await File.ReadAllTextAsync(certPath)}\n</cert>\n\n" +
+                                   $"<key>\n{await File.ReadAllTextAsync(keyPath)}\n</key>\n\n" +
+                                   $"<tls-auth>\n{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n</tls-auth>\n" +
+                                   $"cipher AES-256-CBC\n" +
+                                   $"auth SHA256\n" +
+                                   $"verb 3";
 
-            // Ожидаем завершения процесса
-            process.WaitForExit();
-
-            // Проверяем код завершения процесса
-            if (process.ExitCode != 0)
-            {
-                Console.WriteLine($"Процесс завершился с ошибкой, код: {process.ExitCode}");
-                return null;
-            }
-
-            Console.WriteLine("Процесс завершен успешно.");
+            string configPath = Path.Combine(outputPath, $"{username}.ovpn");
+            await File.WriteAllTextAsync(configPath, configContent);
+            return configPath;
         }
-
-        // Генерация конфигурационного файла .ovpn
-        string certPath = Path.Combine(outputPath, $"{username}.ovpn");
-        string configContent = $"client\n" +
-                               $"dev tun\n" +
-                               $"proto udp\n" +
-                               $"remote 109.120.132.39 1194\n" +
-                               $"resolv-retry infinite\n" +
-                               $"nobind\n" +
-                               $"persist-key\n" +
-                               $"persist-tun\n\n" +
-                               $"<ca>\n" +
-                               $"{await File.ReadAllTextAsync("/etc/openvpn/ca.crt")}\n" +
-                               $"</ca>\n\n" +
-                               $"<cert>\n" +
-                               $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "issued", $"{username}.crt"))}\n" +
-                               $"</cert>\n\n" +
-                               $"<key>\n" +
-                               $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "private", $"{username}.key"))}\n" +
-                               $"</key>\n\n" +
-                               $"<tls-auth>\n" +
-                               $"{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n" +
-                               $"</tls-auth>\n" +
-                               $"cipher AES-256-CBC\n" +
-                               $"auth SHA256\n" +
-                               $"verb 3";
-
-        await File.WriteAllTextAsync(certPath, configContent);
-        return certPath;
     }
     catch (Exception ex)
     {
@@ -151,7 +101,65 @@ async Task<string?> CreateVpnUserAsync(string username)
     }
 }
 
-// Логика для получения конфигурации по пользователю
+static X509Certificate2 LoadCertificate(string certPath, string? password = null)
+{
+    // Считываем сертификат
+    byte[] certBytes = File.ReadAllBytes(certPath);
+    
+    // Определяем тип содержимого сертификата (X.509 или PKCS12)
+    var certContentType = GetCertContentType(certBytes);
+
+    switch (certContentType)
+    {
+        case CertContentType.X509:
+            return X509CertificateLoader.LoadCertificateFromFile(certPath); // Для X.509
+        case CertContentType.Pkcs12:
+            // Для PKCS12 необходимо указать пароль и флаги
+            return X509CertificateLoader.LoadPkcs12FromFile(certPath, password, X509KeyStorageFlags.DefaultKeySet);
+        default:
+            throw new InvalidOperationException("Unknown certificate type.");
+    }
+}
+
+static CertContentType GetCertContentType(byte[] certBytes)
+{
+    // Здесь должен быть ваш код для анализа certBytes и возвращения правильного типа
+    // Например, можно использовать магические байты для проверки типа
+    if (certBytes[0] == 0x30) // Пример для X.509
+    {
+        return CertContentType.X509;
+    }
+    else if (certBytes[0] == 0x30) // Пример для PKCS12
+    {
+        return CertContentType.Pkcs12;
+    }
+    
+    throw new InvalidOperationException("Unknown certificate content.");
+}
+
+static string ExportCertificateToPem(X509Certificate2 certificate)
+{
+    var builder = new StringBuilder();
+    builder.AppendLine("-----BEGIN CERTIFICATE-----");
+    builder.AppendLine(Convert.ToBase64String(certificate.Export(X509ContentType.Cert), Base64FormattingOptions.InsertLineBreaks));
+    builder.AppendLine("-----END CERTIFICATE-----");
+    return builder.ToString();
+}
+
+static string ExportPrivateKeyToPem(RSA rsa)
+{
+    var builder = new StringBuilder();
+    builder.AppendLine("-----BEGIN PRIVATE KEY-----");
+    builder.AppendLine(Convert.ToBase64String(rsa.ExportRSAPrivateKey(), Base64FormattingOptions.InsertLineBreaks));
+    builder.AppendLine("-----END PRIVATE KEY-----");
+    return builder.ToString();
+}
+
+static RSA LoadPrivateKey(string keyPath)
+{
+    return RSA.Create();
+}
+
 async Task<string?> GetVpnConfigAsync(string username)
 {
     try
@@ -171,3 +179,9 @@ async Task<string?> GetVpnConfigAsync(string username)
 }
 
 app.Run();
+
+public enum CertContentType
+{
+    X509,
+    Pkcs12,
+}

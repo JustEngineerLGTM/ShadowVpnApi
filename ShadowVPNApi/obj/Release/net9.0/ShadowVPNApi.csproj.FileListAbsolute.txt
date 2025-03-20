@@ -35,3 +35,4 @@ C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0\ShadowVPNApi.genruntimeconfig.cache
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0\ref\ShadowVPNApi.dll
 C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\obj\Release\net9.0\ShadowVPNApi.sourcelink.json
+C:\Users\JustEngineer\RiderProjects\ShadowVPNApi\ShadowVPNApi\bin\Release\net9.0\Microsoft.Bcl.Cryptography.dll
