@@ -62,15 +62,33 @@ async Task<string?> CreateVpnUserAsync(string username)
             Directory.CreateDirectory(outputPath);
         }
 
-        // Use ProcessStartInfo with Arguments properly to avoid command injection
+        // Check if vars file exists and source it first
+        bool varsFileExists = File.Exists(Path.Combine(easyRsaPath, "vars"));
+        
+        // Improved command that properly sets batch mode and specifies Common Name
+        string command;
+        if (varsFileExists)
+        {
+            // Source vars first, then run easyrsa with proper environment variables
+            command = $"cd {easyRsaPath} && source ./vars && export EASYRSA_BATCH=1 EASYRSA_REQ_CN={username} && ./easyrsa --batch build-client-full {username} nopass";
+        }
+        else
+        {
+            // Direct command with environment variables
+            command = $"cd {easyRsaPath} && export EASYRSA_BATCH=1 EASYRSA_REQ_CN={username} && ./easyrsa --batch build-client-full {username} nopass";
+        }
+
+        Console.WriteLine($"Executing command: {command}");
+
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = "/bin/bash",
-                Arguments = $"-c \"cd {easyRsaPath} && EASYRSA_BATCH=1 ./easyrsa --batch build-client-full {username} nopass\"",
+                Arguments = $"-c \"{command}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                RedirectStandardInput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             }
@@ -101,7 +119,7 @@ async Task<string?> CreateVpnUserAsync(string username)
         process.BeginErrorReadLine();
 
         // Give more time for certificate generation
-        if (!process.WaitForExit(30000))  // Increase timeout to 30 seconds
+        if (!process.WaitForExit(60000))  // Increase timeout to 60 seconds
         {
             process.Kill(true);  // Kill process tree
             Console.WriteLine("ERROR: Process timeout.");
@@ -121,22 +139,41 @@ async Task<string?> CreateVpnUserAsync(string username)
         string userKeyPath = Path.Combine(easyRsaPath, "pki", "private", $"{username}.key");
         string tlsAuthPath = "/etc/openvpn/ta.key";
 
-        if (!File.Exists(caCertPath) || !File.Exists(userCertPath) || 
-            !File.Exists(userKeyPath) || !File.Exists(tlsAuthPath))
+        if (!File.Exists(caCertPath))
         {
-            Console.WriteLine("ERROR: One or more required certificate files not found.");
+            Console.WriteLine($"ERROR: CA certificate not found at {caCertPath}");
+            return null;
+        }
+        
+        if (!File.Exists(userCertPath))
+        {
+            Console.WriteLine($"ERROR: User certificate not found at {userCertPath}");
+            return null;
+        }
+        
+        if (!File.Exists(userKeyPath))
+        {
+            Console.WriteLine($"ERROR: User key not found at {userKeyPath}");
+            return null;
+        }
+        
+        if (!File.Exists(tlsAuthPath))
+        {
+            Console.WriteLine($"ERROR: TLS auth key not found at {tlsAuthPath}");
             return null;
         }
 
         string certPath = Path.Combine(outputPath, $"{username}.ovpn");
         
-        // Extract certificate from full cert file (remove header/footer)
-        string fullCert = await File.ReadAllTextAsync(userCertPath);
-        string certContent = ExtractCertificateContent(fullCert, "CERTIFICATE");
-
-        // Extract key (remove header/footer)
-        string fullKey = await File.ReadAllTextAsync(userKeyPath);
-        string keyContent = ExtractCertificateContent(fullKey, "PRIVATE KEY");
+        // Read certificate files
+        string caCert = await File.ReadAllTextAsync(caCertPath);
+        string userCert = await File.ReadAllTextAsync(userCertPath);
+        string userKey = await File.ReadAllTextAsync(userKeyPath);
+        string tlsAuth = await File.ReadAllTextAsync(tlsAuthPath);
+        
+        // Extract certificate from full cert file (remove header/footer if needed)
+        string certContent = ExtractCertificateContent(userCert, "CERTIFICATE");
+        string keyContent = ExtractCertificateContent(userKey, "PRIVATE KEY");
 
         string configContent = $"client\n" +
                                $"dev tun\n" +
@@ -147,7 +184,7 @@ async Task<string?> CreateVpnUserAsync(string username)
                                $"persist-key\n" +
                                $"persist-tun\n\n" +
                                $"<ca>\n" +
-                               $"{await File.ReadAllTextAsync(caCertPath)}\n" +
+                               $"{caCert}\n" +
                                $"</ca>\n\n" +
                                $"<cert>\n" +
                                $"{certContent}\n" +
@@ -156,7 +193,7 @@ async Task<string?> CreateVpnUserAsync(string username)
                                $"{keyContent}\n" +
                                $"</key>\n\n" +
                                $"<tls-auth>\n" +
-                               $"{await File.ReadAllTextAsync(tlsAuthPath)}\n" +
+                               $"{tlsAuth}\n" +
                                $"</tls-auth>\n" +
                                $"key-direction 1\n" +  // Added key-direction
                                $"cipher AES-256-CBC\n" +
@@ -164,6 +201,7 @@ async Task<string?> CreateVpnUserAsync(string username)
                                $"verb 3";
 
         await File.WriteAllTextAsync(certPath, configContent);
+        Console.WriteLine($"Successfully created VPN config at {certPath}");
         return certPath;
     }
     catch (Exception ex)
@@ -177,6 +215,14 @@ async Task<string?> CreateVpnUserAsync(string username)
 // Helper method to extract certificate content
 string ExtractCertificateContent(string fullCertText, string certType)
 {
+    // If the content already looks like a properly formatted certificate, return it as is
+    if (fullCertText.Contains($"-----BEGIN {certType}-----") && 
+        fullCertText.Contains($"-----END {certType}-----"))
+    {
+        return fullCertText;
+    }
+    
+    // Otherwise try to extract just the certificate part
     var match = Regex.Match(fullCertText, $"-----BEGIN.*?{certType}-----.*?-----END.*?{certType}-----", 
                            RegexOptions.Singleline);
     return match.Success ? match.Value : fullCertText;
