@@ -58,7 +58,7 @@ async Task<string?> CreateVpnUserAsync(string username)
         }
 
         // Генерация запроса на сертификат
-        string command = $"echo yes | ./easyrsa gen-req {username} nopass";
+        string command = $"./easyrsa --batch gen-req {username} nopass";
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
