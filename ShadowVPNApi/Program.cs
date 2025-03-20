@@ -48,8 +48,7 @@ async Task<string?> CreateVpnUserAsync(string username)
 {
     try
     {
-        // Указываем полный путь к EasyRSA (например, с использованием абсолютного пути)
-        string easyRsaPath = "/root/openvpn-ca/easyrsa"; // замените на правильный путь, если требуется
+        string easyRsaPath = "/root/openvpn-ca/easyrsa"; 
         string outputPath = "/etc/openvpn/clients";
 
         if (!Directory.Exists(outputPath))
@@ -57,7 +56,7 @@ async Task<string?> CreateVpnUserAsync(string username)
             Directory.CreateDirectory(outputPath);
         }
 
-        // Используем команду build-client-full для генерации и подписания сертификата одним шагом
+        // Используем команду build-client-full для создания и подписания сертификата одним шагом
         string command = $"./easyrsa --batch build-client-full {username} nopass";
         var process = new Process
         {
@@ -68,9 +67,12 @@ async Task<string?> CreateVpnUserAsync(string username)
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
             }
         };
+
+        // Устанавливаем переменную окружения для неинтерактивного режима
+        process.StartInfo.Environment["EASYRSA_BATCH"] = "1";
 
         process.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine(e.Data); };
         process.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("ERROR: " + e.Data); };
@@ -86,12 +88,12 @@ async Task<string?> CreateVpnUserAsync(string username)
             return null;
         }
 
-        // Формирование конфигурационного файла .ovpn
+        // Генерация конфигурационного файла .ovpn
         string certPath = Path.Combine(outputPath, $"{username}.ovpn");
         string configContent = $"client\n" +
                                $"dev tun\n" +
                                $"proto udp\n" +
-                               $"remote YOUR_SERVER_IP 1194\n" +
+                               $"remote 109.120.132.39 1194\n" +
                                $"resolv-retry infinite\n" +
                                $"nobind\n" +
                                $"persist-key\n" +
@@ -112,7 +114,6 @@ async Task<string?> CreateVpnUserAsync(string username)
                                $"auth SHA256\n" +
                                $"verb 3";
 
-        // Записываем конфигурацию в файл
         await File.WriteAllTextAsync(certPath, configContent);
         return certPath;
     }
@@ -122,6 +123,7 @@ async Task<string?> CreateVpnUserAsync(string username)
         return null;
     }
 }
+
 
 
 
