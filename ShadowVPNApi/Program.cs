@@ -1,6 +1,5 @@
 ﻿using Microsoft.OpenApi.Models;
 using System.Diagnostics;
-using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,7 +48,8 @@ async Task<string?> CreateVpnUserAsync(string username)
 {
     try
     {
-        string easyRsaPath = "/root/openvpn-ca/easyrsa"; 
+        // Указываем полный путь к EasyRSA (например, с использованием абсолютного пути)
+        string easyRsaPath = "/root/openvpn-ca/easyrsa"; // замените на правильный путь, если требуется
         string outputPath = "/etc/openvpn/clients";
 
         if (!Directory.Exists(outputPath))
@@ -57,8 +57,8 @@ async Task<string?> CreateVpnUserAsync(string username)
             Directory.CreateDirectory(outputPath);
         }
 
-        // Генерация запроса на сертификат
-        string command = $"./easyrsa --batch gen-req {username} nopass";
+        // Используем команду build-client-full для генерации и подписания сертификата одним шагом
+        string command = $"./easyrsa --batch build-client-full {username} nopass";
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -82,37 +82,11 @@ async Task<string?> CreateVpnUserAsync(string username)
 
         if (process.ExitCode != 0)
         {
-            Console.WriteLine("Ошибка создания запроса на сертификат.");
+            Console.WriteLine("Ошибка создания сертификата.");
             return null;
         }
 
-        // Подписание сертификата
-        string signCommand = $"echo yes | ./easyrsa sign-req client {username}";
-        var signProcess = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "bash",
-                Arguments = $"-c \"cd {easyRsaPath} && {signCommand}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        signProcess.Start();
-        signProcess.BeginOutputReadLine();
-        signProcess.BeginErrorReadLine();
-        signProcess.WaitForExit();
-
-        if (signProcess.ExitCode != 0)
-        {
-            Console.WriteLine("Ошибка подписания сертификата.");
-            return null;
-        }
-
-        // Генерация конфигурации
+        // Формирование конфигурационного файла .ovpn
         string certPath = Path.Combine(outputPath, $"{username}.ovpn");
         string configContent = $"client\n" +
                                $"dev tun\n" +
@@ -138,6 +112,7 @@ async Task<string?> CreateVpnUserAsync(string username)
                                $"auth SHA256\n" +
                                $"verb 3";
 
+        // Записываем конфигурацию в файл
         await File.WriteAllTextAsync(certPath, configContent);
         return certPath;
     }
@@ -147,6 +122,7 @@ async Task<string?> CreateVpnUserAsync(string username)
         return null;
     }
 }
+
 
 
 // Логика для получения конфигурации по пользователю
