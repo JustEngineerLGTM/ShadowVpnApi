@@ -1,6 +1,5 @@
 ﻿using Microsoft.OpenApi.Models;
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,43 +11,31 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Always enable Swagger
-app.UseSwagger();
-app.UseSwaggerUI(options =>
+if (app.Environment.IsDevelopment())
 {
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "ShadowVPN API v1");
-    options.RoutePrefix = string.Empty;
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ShadowVPN API v1");
+        options.RoutePrefix = string.Empty;
+    });
+}
 
 app.UseHttpsRedirection();
 
 app.MapPost("/createvpnuser", async (string username) =>
 {
-    // Validate username to prevent command injection
-    if (string.IsNullOrWhiteSpace(username) || !Regex.IsMatch(username, @"^[a-zA-Z0-9_-]+$"))
-    {
-        return Results.BadRequest("Invalid username. Use only letters, numbers, underscore and hyphen.");
-    }
-
     var result = await CreateVpnUserAsync(username);
-    return result != null ? Results.Ok(new { ConfigPath = result }) : Results.BadRequest("Error creating VPN user.");
+    return result != null ? Results.Ok(result) : Results.BadRequest("Error creating VPN user.");
 })
-.WithName("CreateVpnUser")
-.WithOpenApi();
+.WithName("CreateVpnUser");
 
 app.MapGet("/getvpnconfig", async (string username) =>
 {
-    // Validate username to prevent path traversal
-    if (string.IsNullOrWhiteSpace(username) || !Regex.IsMatch(username, @"^[a-zA-Z0-9_-]+$"))
-    {
-        return Results.BadRequest("Invalid username. Use only letters, numbers, underscore and hyphen.");
-    }
-
     var config = await GetVpnConfigAsync(username);
     return config != null ? Results.Ok(config) : Results.NotFound($"Config for user {username} not found.");
 })
-.WithName("GetVpnConfig")
-.WithOpenApi();
+.WithName("GetVpnConfig");
 
 async Task<string?> CreateVpnUserAsync(string username)
 {
@@ -58,99 +45,48 @@ async Task<string?> CreateVpnUserAsync(string username)
         string outputPath = "/etc/openvpn/clients";
 
         if (!Directory.Exists(outputPath))
+        {
             Directory.CreateDirectory(outputPath);
+        }
 
-        
-        string exactCommand = $"cd {easyRsaPath} && " +
-                              $"export EASYRSA_BATCH=1 EASYRSA_REQ_CN={username} && " +
-                              $"./easyrsa --batch build-client-full {username} nopass";
+        string command = $"echo \"\" | EASYRSA_BATCH=1 {easyRsaPath}/easyrsa build-client-full {username} nopass";
+        Console.WriteLine($"Executing command: {command}");
 
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = "/bin/bash",
-                Arguments = $"-c \"{exactCommand}\"",
+                Arguments = $"-c \"{command}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = easyRsaPath
+                RedirectStandardInput = false,
             }
         };
 
-        var output = new System.Text.StringBuilder();
-        var error = new System.Text.StringBuilder();
-
-        process.OutputDataReceived += (sender, e) => 
-        { 
-            if (!string.IsNullOrEmpty(e.Data))
-            {
-                output.AppendLine(e.Data);
-                Console.WriteLine("[OUT] " + e.Data);
-            }
-        };
-        process.ErrorDataReceived += (sender, e) => 
-        { 
-            if (!string.IsNullOrEmpty(e.Data))
-            {
-                error.AppendLine(e.Data);
-                Console.WriteLine("[ERR] " + e.Data);
-            }
-        };
+        process.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("[OUT] " + e.Data); };
+        process.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("[ERR] " + e.Data); };
 
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        // Give more time for certificate generation
-        if (!process.WaitForExit(5000))  // 5 second timeout
+        if (!process.WaitForExit(30000))
         {
-            process.Kill(true);
+            process.Kill();
             Console.WriteLine("ERROR: Process timeout.");
             return null;
         }
 
         if (process.ExitCode != 0)
         {
-            Console.WriteLine($"ERROR: Certificate creation failed with exit code {process.ExitCode}");
-            Console.WriteLine($"Error output: {error}");
-            return null;
-        }
-
-        // Check if required files exist before reading
-        string caCertPath = "/etc/openvpn/ca.crt";
-        string userCertPath = Path.Combine(easyRsaPath, "pki", "issued", $"{username}.crt");
-        string userKeyPath = Path.Combine(easyRsaPath, "pki", "private", $"{username}.key");
-        string tlsAuthPath = "/etc/openvpn/ta.key";
-
-        if (!File.Exists(caCertPath))
-        {
-            Console.WriteLine($"ERROR: CA certificate not found at {caCertPath}");
-            return null;
-        }
-        
-        if (!File.Exists(userCertPath))
-        {
-            Console.WriteLine($"ERROR: User certificate not found at {userCertPath}");
-            return null;
-        }
-        
-        if (!File.Exists(userKeyPath))
-        {
-            Console.WriteLine($"ERROR: User key not found at {userKeyPath}");
-            return null;
-        }
-        
-        if (!File.Exists(tlsAuthPath))
-        {
-            Console.WriteLine($"ERROR: TLS auth key not found at {tlsAuthPath}");
+            Console.WriteLine("ERROR: Certificate creation failed.");
             return null;
         }
 
         string certPath = Path.Combine(outputPath, $"{username}.ovpn");
-        
-        // Create config file
         string configContent = $"client\n" +
                                $"dev tun\n" +
                                $"proto udp\n" +
@@ -160,30 +96,27 @@ async Task<string?> CreateVpnUserAsync(string username)
                                $"persist-key\n" +
                                $"persist-tun\n\n" +
                                $"<ca>\n" +
-                               $"{await File.ReadAllTextAsync(caCertPath)}\n" +
+                               $"{await File.ReadAllTextAsync("/etc/openvpn/ca.crt")}\n" +
                                $"</ca>\n\n" +
                                $"<cert>\n" +
-                               $"{await File.ReadAllTextAsync(userCertPath)}\n" +
+                               $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "issued", $"{username}.crt"))}\n" +
                                $"</cert>\n\n" +
                                $"<key>\n" +
-                               $"{await File.ReadAllTextAsync(userKeyPath)}\n" +
+                               $"{await File.ReadAllTextAsync(Path.Combine(easyRsaPath, "pki", "private", $"{username}.key"))}\n" +
                                $"</key>\n\n" +
                                $"<tls-auth>\n" +
-                               $"{await File.ReadAllTextAsync(tlsAuthPath)}\n" +
+                               $"{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n" +
                                $"</tls-auth>\n" +
-                               $"key-direction 1\n" +
                                $"cipher AES-256-CBC\n" +
                                $"auth SHA256\n" +
                                $"verb 3";
 
         await File.WriteAllTextAsync(certPath, configContent);
-        Console.WriteLine($"Successfully created VPN config at {certPath}");
         return certPath;
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Exception: {ex.Message}");
-        Console.WriteLine($"Stack trace: {ex.StackTrace}");
         return null;
     }
 }
@@ -197,14 +130,11 @@ async Task<string?> GetVpnConfigAsync(string username)
         {
             return await File.ReadAllTextAsync(configPath);
         }
-        
-        Console.WriteLine($"Config file not found: {configPath}");
         return null;
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Exception in GetVpnConfigAsync: {ex.Message}");
-        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        Console.WriteLine($"Exception: {ex.Message}");
         return null;
     }
 }
