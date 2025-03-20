@@ -61,20 +61,21 @@ async Task<string?> CreateVpnUserAsync(string username)
             Directory.CreateDirectory(outputPath);
 
         
+        string exactCommand = $"cd {easyRsaPath} && " +
+                              $"export EASYRSA_BATCH=1 EASYRSA_REQ_CN={username} && " +
+                              $"./easyrsa --batch build-client-full {username} nopass";
+
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = "/bin/bash",
-                Arguments = $"-c \"cd {easyRsaPath} && " +
-                            "source ./vars && " +  // Load EasyRSA environment
-                            "export EASYRSA_BATCH=1 EASYRSA_REQ_CN={username} && " +  // Batch mode + CN
-                            "./easyrsa build-client-full {username} nopass\"",
+                Arguments = $"-c \"{exactCommand}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = easyRsaPath  
+                WorkingDirectory = easyRsaPath
             }
         };
 
