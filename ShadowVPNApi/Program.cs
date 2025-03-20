@@ -3,30 +3,26 @@ using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Добавьте Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    // Настройка Swagger (опционально)
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShadowVPN API", Version = "v1" });
 });
 
 var app = builder.Build();
 
-// Использование Swagger в режиме разработки
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger(); // Подключаем Swagger
+    app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ShadowVPN API v1"); // Указываем путь до Swagger UI
-        options.RoutePrefix = string.Empty; // Делает Swagger UI доступным по корневому URL
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ShadowVPN API v1");
+        options.RoutePrefix = string.Empty;
     });
 }
 
 app.UseHttpsRedirection();
 
-// API для создания нового VPN пользователя
 app.MapPost("/createvpnuser", async (string username) =>
 {
     var result = await CreateVpnUserAsync(username);
@@ -34,7 +30,6 @@ app.MapPost("/createvpnuser", async (string username) =>
 })
 .WithName("CreateVpnUser");
 
-// API для получения конфигурации по имени пользователя
 app.MapGet("/getvpnconfig", async (string username) =>
 {
     var config = await GetVpnConfigAsync(username);
@@ -42,13 +37,11 @@ app.MapGet("/getvpnconfig", async (string username) =>
 })
 .WithName("GetVpnConfig");
 
-
-// Логика создания нового пользователя и сертификатов
 async Task<string?> CreateVpnUserAsync(string username)
 {
     try
     {
-        string easyRsaPath = "/root/openvpn-ca/easyrsa"; 
+        string easyRsaPath = "/root/openvpn-ca";
         string outputPath = "/etc/openvpn/clients";
 
         if (!Directory.Exists(outputPath))
@@ -56,39 +49,44 @@ async Task<string?> CreateVpnUserAsync(string username)
             Directory.CreateDirectory(outputPath);
         }
 
-        // Используем команду build-client-full для создания и подписания сертификата одним шагом
-        string command = $"./easyrsa --batch build-client-full {username} nopass";
+        string command = $"EASYRSA_BATCH=1 ./easyrsa --batch build-client-full {username} nopass";
+        
+        Console.WriteLine($"DEBUG: Running command: cd {easyRsaPath} && {command}");
+
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = "bash",
+                FileName = "/bin/bash",
                 Arguments = $"-c \"cd {easyRsaPath} && {command}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                RedirectStandardInput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             }
         };
 
-        // Устанавливаем переменную окружения для неинтерактивного режима
-        process.StartInfo.Environment["EASYRSA_BATCH"] = "1";
-
-        process.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine(e.Data); };
-        process.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("ERROR: " + e.Data); };
+        process.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("[OUT] " + e.Data); };
+        process.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine("[ERR] " + e.Data); };
 
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        process.WaitForExit();
 
-        if (process.ExitCode != 0)
+        if (!process.WaitForExit(60000))
         {
-            Console.WriteLine("Ошибка создания сертификата.");
+            process.Kill();
+            Console.WriteLine("ERROR: Process timeout.");
             return null;
         }
 
-        // Генерация конфигурационного файла .ovpn
+        if (process.ExitCode != 0)
+        {
+            Console.WriteLine("ERROR: Certificate creation failed.");
+            return null;
+        }
+
         string certPath = Path.Combine(outputPath, $"{username}.ovpn");
         string configContent = $"client\n" +
                                $"dev tun\n" +
@@ -124,10 +122,6 @@ async Task<string?> CreateVpnUserAsync(string username)
     }
 }
 
-
-
-
-// Логика для получения конфигурации по пользователю
 async Task<string?> GetVpnConfigAsync(string username)
 {
     try
