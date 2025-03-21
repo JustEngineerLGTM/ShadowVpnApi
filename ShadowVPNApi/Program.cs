@@ -53,8 +53,16 @@ async Task<string?> CreateVpnUserAsync(string username)
         string caCertPath = "/root/openvpn-ca/pki/ca.crt";
         string caKeyPath = "/root/openvpn-ca/pki/private/ca.key"; // путь к закрытому ключу CA
         X509Certificate2 caCert = new X509Certificate2(caCertPath);
+        // Чтение и обработка ключа из PEM-формата
+        string keyText = File.ReadAllText(caKeyPath);
+        string pemContent = keyText
+            .Replace("-----BEGIN PRIVATE KEY-----", "")
+            .Replace("-----END PRIVATE KEY-----", "")
+            .Replace("\n", "")
+            .Replace("\r", "");
+
         RSA caPrivateKey = RSA.Create();
-        caPrivateKey.ImportRSAPrivateKey(File.ReadAllBytes(caKeyPath), out _);
+        caPrivateKey.ImportPkcs8PrivateKey(Convert.FromBase64String(pemContent), out _);
         
         using (RSA rsa = RSA.Create(2048))
         {
