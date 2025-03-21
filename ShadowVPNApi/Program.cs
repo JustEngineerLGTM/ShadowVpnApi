@@ -48,19 +48,21 @@ async Task<string?> CreateVpnUserAsync(string username)
         {
             Directory.CreateDirectory(outputPath);
         }
+        
         // Загрузите корневой сертификат и ключ CA
         string caCertPath = "/root/openvpn-ca/pki/ca.crt";
         string caKeyPath = "/root/openvpn-ca/pki/private/ca.key"; // путь к закрытому ключу CA
         X509Certificate2 caCert = new X509Certificate2(caCertPath);
         RSA caPrivateKey = RSA.Create();
         caPrivateKey.ImportRSAPrivateKey(File.ReadAllBytes(caKeyPath), out _);
+        
         using (RSA rsa = RSA.Create(2048))
         {
             var certRequest = new CertificateRequest($"CN={username}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             DateTime notBefore = DateTime.UtcNow;
             DateTime notAfter = notBefore.AddYears(1);
 
-            X509Certificate2 signedClientCert = certRequest.Create(caCert, notBefore, notAfter, new byte[] { 1, 2, 3, 4 }); 
+            X509Certificate2 signedClientCert = certRequest.Create(caCert, notBefore, notAfter, new byte[] { 1, 2, 3, 4 });
             signedClientCert = new X509Certificate2(signedClientCert.Export(X509ContentType.Cert));
 
             // Save certificate and key
@@ -110,13 +112,11 @@ static string ExportCertificateToPem(X509Certificate2 certificate)
 static string ExportPrivateKeyToPem(RSA rsa)
 {
     var builder = new StringBuilder();
-    builder.AppendLine("-----BEGIN RSA PRIVATE KEY-----");
+    builder.AppendLine("-----BEGIN PRIVATE KEY-----");
     builder.AppendLine(Convert.ToBase64String(rsa.ExportRSAPrivateKey(), Base64FormattingOptions.InsertLineBreaks));
-    builder.AppendLine("-----END RSA PRIVATE KEY-----");
+    builder.AppendLine("-----END PRIVATE KEY-----");
     return builder.ToString();
 }
-
-
 
 async Task<string?> GetVpnConfigAsync(string username)
 {
