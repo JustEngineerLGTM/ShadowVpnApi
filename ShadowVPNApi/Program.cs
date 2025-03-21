@@ -48,20 +48,25 @@ async Task<string?> CreateVpnUserAsync(string username)
         {
             Directory.CreateDirectory(outputPath);
         }
-
+        // Загрузите корневой сертификат и ключ CA
+        string caCertPath = "/root/openvpn-ca/pki/ca.crt";
+        string caKeyPath = "/root/openvpn-ca/pki/private/ca.crt"; // путь к закрытому ключу CA
+        X509Certificate2 caCert = new X509Certificate2(caCertPath);
+        RSA caPrivateKey = RSA.Create();
+        caPrivateKey.ImportRSAPrivateKey(File.ReadAllBytes(caKeyPath), out _);
         using (RSA rsa = RSA.Create(2048))
         {
             var certRequest = new CertificateRequest($"CN={username}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             DateTime notBefore = DateTime.UtcNow;
             DateTime notAfter = notBefore.AddYears(1);
 
-            // create a self-signed certificate
-            X509Certificate2 clientCert = certRequest.CreateSelfSigned(notBefore, notAfter);
+            X509Certificate2 signedClientCert = certRequest.Create(caCert, notBefore, notAfter, new byte[] { 1, 2, 3, 4 }); 
+            signedClientCert = new X509Certificate2(signedClientCert.Export(X509ContentType.Pfx, "password"));
 
-            // Save certificate and key using X509Certificate2 Export methods
+            // Save certificate and key
             string certPath = Path.Combine(outputPath, $"{username}.crt");
             string keyPath = Path.Combine(outputPath, $"{username}.key");
-            File.WriteAllText(certPath, ExportCertificateToPem(clientCert));
+            File.WriteAllText(certPath, ExportCertificateToPem(signedClientCert));
             File.WriteAllText(keyPath, ExportPrivateKeyToPem(rsa));
 
             // Generate OpenVPN config
@@ -73,7 +78,7 @@ async Task<string?> CreateVpnUserAsync(string username)
                                    $"nobind\n" +
                                    $"persist-key\n" +
                                    $"persist-tun\n\n" +
-                                   $"<ca>\n{await File.ReadAllTextAsync("/etc/openvpn/ca.crt")}\n</ca>\n\n" +
+                                   $"<ca>\n{await File.ReadAllTextAsync("/root/openvpn-ca/pki/ca.crt")}\n</ca>\n\n" +
                                    $"<cert>\n{await File.ReadAllTextAsync(certPath)}\n</cert>\n\n" +
                                    $"<key>\n{await File.ReadAllTextAsync(keyPath)}\n</key>\n\n" +
                                    $"<tls-auth>\n{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n</tls-auth>\n" +
@@ -95,17 +100,23 @@ async Task<string?> CreateVpnUserAsync(string username)
 
 static string ExportCertificateToPem(X509Certificate2 certificate)
 {
-    // Export the certificate to PEM format using built-in Export method
-    byte[] certBytes = certificate.Export(X509ContentType.Cert);
-    return $"-----BEGIN CERTIFICATE-----\n{Convert.ToBase64String(certBytes, Base64FormattingOptions.InsertLineBreaks)}\n-----END CERTIFICATE-----";
+    var builder = new StringBuilder();
+    builder.AppendLine("-----BEGIN CERTIFICATE-----");
+    builder.AppendLine(Convert.ToBase64String(certificate.Export(X509ContentType.Cert), Base64FormattingOptions.InsertLineBreaks));
+    builder.AppendLine("-----END CERTIFICATE-----");
+    return builder.ToString();
 }
 
 static string ExportPrivateKeyToPem(RSA rsa)
 {
-    // Export the RSA private key to PEM format using built-in Export method
-    byte[] privateKeyBytes = rsa.ExportRSAPrivateKey();
-    return $"-----BEGIN PRIVATE KEY-----\n{Convert.ToBase64String(privateKeyBytes, Base64FormattingOptions.InsertLineBreaks)}\n-----END PRIVATE KEY-----";
+    var builder = new StringBuilder();
+    builder.AppendLine("-----BEGIN RSA PRIVATE KEY-----");
+    builder.AppendLine(Convert.ToBase64String(rsa.ExportRSAPrivateKey(), Base64FormattingOptions.InsertLineBreaks));
+    builder.AppendLine("-----END RSA PRIVATE KEY-----");
+    return builder.ToString();
 }
+
+
 
 async Task<string?> GetVpnConfigAsync(string username)
 {
