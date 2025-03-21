@@ -105,11 +105,13 @@ static string ExportCertificateToPem(X509Certificate2 certificate)
 static string ExportPrivateKeyToPem(RSA rsa)
 {
     var builder = new StringBuilder();
-    builder.AppendLine("-----BEGIN PRIVATE KEY-----");
+    builder.AppendLine("-----BEGIN RSA PRIVATE KEY-----");
     builder.AppendLine(Convert.ToBase64String(rsa.ExportRSAPrivateKey(), Base64FormattingOptions.InsertLineBreaks));
-    builder.AppendLine("-----END PRIVATE KEY-----");
+    builder.AppendLine("-----END RSA PRIVATE KEY-----");
     return builder.ToString();
 }
+
+
 
 async Task<string?> GetVpnConfigAsync(string username)
 {
