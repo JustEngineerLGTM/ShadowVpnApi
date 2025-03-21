@@ -55,10 +55,10 @@ async Task<string?> CreateVpnUserAsync(string username)
             DateTime notBefore = DateTime.UtcNow;
             DateTime notAfter = notBefore.AddYears(1);
 
-            // Skip certificate CA handling, create a self-signed certificate
+            // create a self-signed certificate
             X509Certificate2 clientCert = certRequest.CreateSelfSigned(notBefore, notAfter);
 
-            // Save certificate and key
+            // Save certificate and key using X509Certificate2 Export methods
             string certPath = Path.Combine(outputPath, $"{username}.crt");
             string keyPath = Path.Combine(outputPath, $"{username}.key");
             File.WriteAllText(certPath, ExportCertificateToPem(clientCert));
@@ -95,23 +95,17 @@ async Task<string?> CreateVpnUserAsync(string username)
 
 static string ExportCertificateToPem(X509Certificate2 certificate)
 {
-    var builder = new StringBuilder();
-    builder.AppendLine("-----BEGIN CERTIFICATE-----");
-    builder.AppendLine(Convert.ToBase64String(certificate.Export(X509ContentType.Cert), Base64FormattingOptions.InsertLineBreaks));
-    builder.AppendLine("-----END CERTIFICATE-----");
-    return builder.ToString();
+    // Export the certificate to PEM format using built-in Export method
+    byte[] certBytes = certificate.Export(X509ContentType.Cert);
+    return $"-----BEGIN CERTIFICATE-----\n{Convert.ToBase64String(certBytes, Base64FormattingOptions.InsertLineBreaks)}\n-----END CERTIFICATE-----";
 }
 
 static string ExportPrivateKeyToPem(RSA rsa)
 {
-    var builder = new StringBuilder();
-    builder.AppendLine("-----BEGIN RSA PRIVATE KEY-----");
-    builder.AppendLine(Convert.ToBase64String(rsa.ExportRSAPrivateKey(), Base64FormattingOptions.InsertLineBreaks));
-    builder.AppendLine("-----END RSA PRIVATE KEY-----");
-    return builder.ToString();
+    // Export the RSA private key to PEM format using built-in Export method
+    byte[] privateKeyBytes = rsa.ExportRSAPrivateKey();
+    return $"-----BEGIN PRIVATE KEY-----\n{Convert.ToBase64String(privateKeyBytes, Base64FormattingOptions.InsertLineBreaks)}\n-----END PRIVATE KEY-----";
 }
-
-
 
 async Task<string?> GetVpnConfigAsync(string username)
 {
