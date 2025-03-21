@@ -66,45 +66,43 @@ async Task<string?> CreateVpnUserAsync(string username)
         using X509Certificate2 caCertWithPrivateKey = X509Certificate2.CreateFromPem(
             File.ReadAllText(caCertPath),
             File.ReadAllText(caKeyPath));
-        
-        using (RSA rsa = RSA.Create(2048))
-        {
-            var certRequest = new CertificateRequest($"CN={username}", rsa, HashAlgorithmName.SHA256,
-                RSASignaturePadding.Pkcs1);
-            DateTime notBefore = DateTime.UtcNow;
-            DateTime notAfter = notBefore.AddYears(1);
 
-            X509Certificate2 signedClientCert =
-                certRequest.Create(caCertWithPrivateKey, notBefore, notAfter, new byte[] { 1, 2, 3, 4 });
-            signedClientCert = new X509Certificate2(signedClientCert.Export(X509ContentType.Cert));
+        using RSA rsa = RSA.Create(2048);
+        var certRequest = new CertificateRequest($"CN={username}", rsa, HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        DateTime notBefore = DateTime.UtcNow;
+        DateTime notAfter = notBefore.AddYears(1);
 
-            // Save certificate and key
-            string certPath = Path.Combine(outputPath, $"{username}.crt");
-            string keyPath = Path.Combine(outputPath, $"{username}.key");
-            File.WriteAllText(certPath, ExportCertificateToPem(signedClientCert));
-            File.WriteAllText(keyPath, ExportPrivateKeyToPem(rsa));
+        X509Certificate2 signedClientCert =
+            certRequest.Create(caCertWithPrivateKey, notBefore, notAfter, new byte[] { 1, 2, 3, 4 });
+        signedClientCert = new X509Certificate2(signedClientCert.Export(X509ContentType.Cert));
 
-            // Generate OpenVPN config
-            string configContent = $"client\n" +
-                                   $"dev tun\n" +
-                                   $"proto udp\n" +
-                                   $"remote 109.120.132.39 1194\n" +
-                                   $"resolv-retry infinite\n" +
-                                   $"nobind\n" +
-                                   $"persist-key\n" +
-                                   $"persist-tun\n\n" +
-                                   $"<ca>\n{await File.ReadAllTextAsync("/root/openvpn-ca/pki/ca.crt")}\n</ca>\n\n" +
-                                   $"<cert>\n{await File.ReadAllTextAsync(certPath)}\n</cert>\n\n" +
-                                   $"<key>\n{await File.ReadAllTextAsync(keyPath)}\n</key>\n\n" +
-                                   $"<tls-auth>\n{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n</tls-auth>\n" +
-                                   $"cipher AES-256-CBC\n" +
-                                   $"auth SHA256\n" +
-                                   $"verb 3";
+        // Save certificate and key
+        string certPath = Path.Combine(outputPath, $"{username}.crt");
+        string keyPath = Path.Combine(outputPath, $"{username}.key");
+        File.WriteAllText(certPath, ExportCertificateToPem(signedClientCert));
+        File.WriteAllText(keyPath, ExportPrivateKeyToPem(rsa));
 
-            string configPath = Path.Combine(outputPath, $"{username}.ovpn");
-            await File.WriteAllTextAsync(configPath, configContent);
-            return configPath;
-        }
+        // Generate OpenVPN config
+        string configContent = $"client\n" +
+                               $"dev tun\n" +
+                               $"proto udp\n" +
+                               $"remote 109.120.132.39 1194\n" +
+                               $"resolv-retry infinite\n" +
+                               $"nobind\n" +
+                               $"persist-key\n" +
+                               $"persist-tun\n\n" +
+                               $"<ca>\n{await File.ReadAllTextAsync("/root/openvpn-ca/pki/ca.crt")}\n</ca>\n\n" +
+                               $"<cert>\n{await File.ReadAllTextAsync(certPath)}\n</cert>\n\n" +
+                               $"<key>\n{await File.ReadAllTextAsync(keyPath)}\n</key>\n\n" +
+                               $"<tls-auth>\n{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n</tls-auth>\n" +
+                               $"cipher AES-256-CBC\n" +
+                               $"auth SHA256\n" +
+                               $"verb 3";
+
+        string configPath = Path.Combine(outputPath, $"{username}.ovpn");
+        await File.WriteAllTextAsync(configPath, configContent);
+        return configPath;
     }
     catch (Exception ex)
     {
@@ -127,7 +125,7 @@ static string ExportPrivateKeyToPem(RSA rsa)
 {
     var builder = new StringBuilder();
     builder.AppendLine("-----BEGIN PRIVATE KEY-----");
-    builder.AppendLine(Convert.ToBase64String(rsa.ExportRSAPrivateKey(), Base64FormattingOptions.InsertLineBreaks));
+    builder.AppendLine(Convert.ToBase64String(rsa.ExportPkcs8PrivateKey(), Base64FormattingOptions.InsertLineBreaks));
     builder.AppendLine("-----END PRIVATE KEY-----");
     return builder.ToString();
 }
