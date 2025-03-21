@@ -50,7 +50,7 @@ async Task<string?> CreateVpnUserAsync(string username)
         }
         // Загрузите корневой сертификат и ключ CA
         string caCertPath = "/root/openvpn-ca/pki/ca.crt";
-        string caKeyPath = "/root/openvpn-ca/pki/private/ca.crt"; // путь к закрытому ключу CA
+        string caKeyPath = "/root/openvpn-ca/pki/private/ca.key"; // путь к закрытому ключу CA
         X509Certificate2 caCert = new X509Certificate2(caCertPath);
         RSA caPrivateKey = RSA.Create();
         caPrivateKey.ImportRSAPrivateKey(File.ReadAllBytes(caKeyPath), out _);
@@ -61,7 +61,7 @@ async Task<string?> CreateVpnUserAsync(string username)
             DateTime notAfter = notBefore.AddYears(1);
 
             X509Certificate2 signedClientCert = certRequest.Create(caCert, notBefore, notAfter, new byte[] { 1, 2, 3, 4 }); 
-            signedClientCert = new X509Certificate2(signedClientCert.Export(X509ContentType.Pfx, "password"));
+            signedClientCert = new X509Certificate2(signedClientCert.Export(X509ContentType.Cert));
 
             // Save certificate and key
             string certPath = Path.Combine(outputPath, $"{username}.crt");
