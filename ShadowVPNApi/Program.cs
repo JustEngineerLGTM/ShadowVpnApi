@@ -112,10 +112,10 @@ static X509Certificate2 LoadCertificate(string certPath, string? password = null
     switch (certContentType)
     {
         case CertContentType.X509:
-            return X509CertificateLoader.LoadCertificateFromFile(certPath); // Для X.509
+            return new X509Certificate2(certBytes); // Для X.509
         case CertContentType.Pkcs12:
             // Для PKCS12 необходимо указать пароль и флаги
-            return X509CertificateLoader.LoadPkcs12FromFile(certPath, password, X509KeyStorageFlags.DefaultKeySet);
+            return new X509Certificate2(certBytes, password, X509KeyStorageFlags.DefaultKeySet);
         default:
             throw new InvalidOperationException("Unknown certificate type.");
     }
@@ -123,17 +123,19 @@ static X509Certificate2 LoadCertificate(string certPath, string? password = null
 
 static CertContentType GetCertContentType(byte[] certBytes)
 {
-    // Здесь должен быть ваш код для анализа certBytes и возвращения правильного типа
-    // Например, можно использовать магические байты для проверки типа
-    if (certBytes[0] == 0x30) // Пример для X.509
+    // Проверка на X.509
+    if (certBytes.Length > 4 && certBytes[0] == 0x30)
     {
         return CertContentType.X509;
     }
-    else if (certBytes[0] == 0x30) // Пример для PKCS12
+    
+    // Проверка на PKCS12
+    if (certBytes.Length > 4 && certBytes[0] == 0x30 && certBytes[1] == 0x82)
     {
         return CertContentType.Pkcs12;
     }
     
+    // Если не найдено, выбрасываем исключение
     throw new InvalidOperationException("Unknown certificate content.");
 }
 
@@ -180,8 +182,8 @@ async Task<string?> GetVpnConfigAsync(string username)
 
 app.Run();
 
-public enum CertContentType
+enum CertContentType
 {
     X509,
-    Pkcs12,
+    Pkcs12
 }
