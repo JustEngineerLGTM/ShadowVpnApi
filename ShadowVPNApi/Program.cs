@@ -1,11 +1,11 @@
 ﻿using Microsoft.OpenApi.Models;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Security.Cryptography.X509Certificates;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Добавьте Swagger
+// Add Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -14,7 +14,7 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Использование Swagger в режиме разработки
+// Use Swagger in development mode
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -55,24 +55,16 @@ async Task<string?> CreateVpnUserAsync(string username)
             DateTime notBefore = DateTime.UtcNow;
             DateTime notAfter = notBefore.AddYears(1);
 
-            string caCertPath = "/etc/openvpn/ca.crt";
-            string caKeyPath = "/etc/openvpn/ca.key";
+            // Skip certificate CA handling, create a self-signed certificate
+            X509Certificate2 clientCert = certRequest.CreateSelfSigned(notBefore, notAfter);
 
-            // Загрузка сертификата CA через X509CertificateLoader
-            X509Certificate2 caCert = LoadCertificate(caCertPath);
-            RSA caKey = LoadPrivateKey(caKeyPath);
-
-            // Создание и подписание клиентского сертификата
-            X509Certificate2 clientCert = certRequest.Create(caCert, notBefore, notAfter, Guid.NewGuid().ToByteArray());
-            var signedClientCert = clientCert.CopyWithPrivateKey(caKey);
-
-            // Сохраняем сертификат и ключ клиента
+            // Save certificate and key
             string certPath = Path.Combine(outputPath, $"{username}.crt");
             string keyPath = Path.Combine(outputPath, $"{username}.key");
-            File.WriteAllText(certPath, ExportCertificateToPem(signedClientCert));
+            File.WriteAllText(certPath, ExportCertificateToPem(clientCert));
             File.WriteAllText(keyPath, ExportPrivateKeyToPem(rsa));
 
-            // Генерация конфигурации OpenVPN
+            // Generate OpenVPN config
             string configContent = $"client\n" +
                                    $"dev tun\n" +
                                    $"proto udp\n" +
@@ -81,7 +73,7 @@ async Task<string?> CreateVpnUserAsync(string username)
                                    $"nobind\n" +
                                    $"persist-key\n" +
                                    $"persist-tun\n\n" +
-                                   $"<ca>\n{await File.ReadAllTextAsync(caCertPath)}\n</ca>\n\n" +
+                                   $"<ca>\n{await File.ReadAllTextAsync("/etc/openvpn/ca.crt")}\n</ca>\n\n" +
                                    $"<cert>\n{await File.ReadAllTextAsync(certPath)}\n</cert>\n\n" +
                                    $"<key>\n{await File.ReadAllTextAsync(keyPath)}\n</key>\n\n" +
                                    $"<tls-auth>\n{await File.ReadAllTextAsync("/etc/openvpn/ta.key")}\n</tls-auth>\n" +
@@ -101,44 +93,6 @@ async Task<string?> CreateVpnUserAsync(string username)
     }
 }
 
-static X509Certificate2 LoadCertificate(string certPath, string? password = null)
-{
-    // Считываем сертификат
-    byte[] certBytes = File.ReadAllBytes(certPath);
-    
-    // Определяем тип содержимого сертификата (X.509 или PKCS12)
-    var certContentType = GetCertContentType(certBytes);
-
-    switch (certContentType)
-    {
-        case CertContentType.X509:
-            return new X509Certificate2(certBytes); // Для X.509
-        case CertContentType.Pkcs12:
-            // Для PKCS12 необходимо указать пароль и флаги
-            return new X509Certificate2(certBytes, password, X509KeyStorageFlags.DefaultKeySet);
-        default:
-            throw new InvalidOperationException("Unknown certificate type.");
-    }
-}
-
-static CertContentType GetCertContentType(byte[] certBytes)
-{
-    // Проверка на X.509
-    if (certBytes.Length > 4 && certBytes[0] == 0x30)
-    {
-        return CertContentType.X509;
-    }
-    
-    // Проверка на PKCS12
-    if (certBytes.Length > 4 && certBytes[0] == 0x30 && certBytes[1] == 0x82)
-    {
-        return CertContentType.Pkcs12;
-    }
-    
-    // Если не найдено, выбрасываем исключение
-    throw new InvalidOperationException("Unknown certificate content.");
-}
-
 static string ExportCertificateToPem(X509Certificate2 certificate)
 {
     var builder = new StringBuilder();
@@ -155,11 +109,6 @@ static string ExportPrivateKeyToPem(RSA rsa)
     builder.AppendLine(Convert.ToBase64String(rsa.ExportRSAPrivateKey(), Base64FormattingOptions.InsertLineBreaks));
     builder.AppendLine("-----END PRIVATE KEY-----");
     return builder.ToString();
-}
-
-static RSA LoadPrivateKey(string keyPath)
-{
-    return RSA.Create();
 }
 
 async Task<string?> GetVpnConfigAsync(string username)
@@ -181,9 +130,3 @@ async Task<string?> GetVpnConfigAsync(string username)
 }
 
 app.Run();
-
-enum CertContentType
-{
-    X509,
-    Pkcs12
-}
