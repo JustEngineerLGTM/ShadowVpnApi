@@ -48,7 +48,7 @@ async Task<string?> CreateVpnUserAsync(string username)
         {
             Directory.CreateDirectory(outputPath);
         }
-        
+
         // Загрузите корневой сертификат и ключ CA
         string caCertPath = "/root/openvpn-ca/pki/ca.crt";
         string caKeyPath = "/root/openvpn-ca/pki/private/ca.key"; // путь к закрытому ключу CA
@@ -63,14 +63,19 @@ async Task<string?> CreateVpnUserAsync(string username)
 
         RSA caPrivateKey = RSA.Create();
         caPrivateKey.ImportPkcs8PrivateKey(Convert.FromBase64String(pemContent), out _);
+        using X509Certificate2 caCertWithPrivateKey = X509Certificate2.CreateFromPem(
+            File.ReadAllText(caCertPath),
+            File.ReadAllText(caKeyPath));
         
         using (RSA rsa = RSA.Create(2048))
         {
-            var certRequest = new CertificateRequest($"CN={username}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var certRequest = new CertificateRequest($"CN={username}", rsa, HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
             DateTime notBefore = DateTime.UtcNow;
             DateTime notAfter = notBefore.AddYears(1);
 
-            X509Certificate2 signedClientCert = certRequest.Create(caCert, notBefore, notAfter, new byte[] { 1, 2, 3, 4 });
+            X509Certificate2 signedClientCert =
+                certRequest.Create(caCertWithPrivateKey, notBefore, notAfter, new byte[] { 1, 2, 3, 4 });
             signedClientCert = new X509Certificate2(signedClientCert.Export(X509ContentType.Cert));
 
             // Save certificate and key
@@ -112,7 +117,8 @@ static string ExportCertificateToPem(X509Certificate2 certificate)
 {
     var builder = new StringBuilder();
     builder.AppendLine("-----BEGIN CERTIFICATE-----");
-    builder.AppendLine(Convert.ToBase64String(certificate.Export(X509ContentType.Cert), Base64FormattingOptions.InsertLineBreaks));
+    builder.AppendLine(Convert.ToBase64String(certificate.Export(X509ContentType.Cert),
+        Base64FormattingOptions.InsertLineBreaks));
     builder.AppendLine("-----END CERTIFICATE-----");
     return builder.ToString();
 }
@@ -135,6 +141,7 @@ async Task<string?> GetVpnConfigAsync(string username)
         {
             return await File.ReadAllTextAsync(configPath);
         }
+
         return null;
     }
     catch (Exception ex)
