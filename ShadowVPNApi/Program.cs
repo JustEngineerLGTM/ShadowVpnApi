@@ -2,25 +2,26 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Security.Cryptography.X509Certificates;
+using Tomlyn;
+using Tomlyn.Model;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add Swagger
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShadowVPN API", Version = "v1" });
+    options.SwaggerDoc("v2", new OpenApiInfo { Title = "ShadowVPN API", Version = "v2" });
 });
 
 var app = builder.Build();
 
-// Use Swagger in development mode
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ShadowVPN API v1");
+        options.SwaggerEndpoint("/swagger/v2/swagger.json", "ShadowVPN API v2");
         options.RoutePrefix = string.Empty;
     });
 }
@@ -33,27 +34,39 @@ app.MapPost("/createvpnuser", async (string username) =>
     return result != null ? Results.Ok(result) : Results.BadRequest("Error creating VPN user.");
 }).WithName("CreateVpnUser");
 
-app.MapGet("/getvpnconfig", async (string username) =>
+app.MapGet("/getvpnconfig", async (string raw) =>
 {
+    var lastEqual = raw.LastIndexOf('=');
+    if (lastEqual <= 0 || lastEqual == raw.Length - 1)
+        return Results.BadRequest("Неверный формат запроса");
+
+    string username = raw[..lastEqual];
+    string hash = raw[(lastEqual + 1)..];
+    if (!await CheckPasswordAsync(hash))
+        return Results.Unauthorized();
+
     var config = await GetVpnConfigAsync(username);
-    return config != null ? Results.Ok(config) : Results.NotFound($"Config for user {username} not found.");
+    return config != null ? Results.Ok(config) : Results.NotFound($"Конфигурация для пользователя {username} не найдена.");
 }).WithName("GetVpnConfig");
 
 async Task<string?> CreateVpnUserAsync(string username)
 {
     try
-    {
+    {   
+        string vpnconfigPath = "/client/vpnconfig";
         string outputPath = "/etc/openvpn/clients";
         if (!Directory.Exists(outputPath))
         {
             Directory.CreateDirectory(outputPath);
         }
 
-        // Загрузите корневой сертификат и ключ CA
+        if (File.Exists(vpnconfigPath) )
+        {
+            
+        }
+        
         string caCertPath = "/root/openvpn-ca/pki/ca.crt";
-        string caKeyPath = "/root/openvpn-ca/pki/private/ca.key"; // путь к закрытому ключу CA
-        X509Certificate2 caCert = new X509Certificate2(caCertPath);
-        // Чтение и обработка ключа из PEM-формата
+        string caKeyPath = "/root/openvpn-ca/pki/private/ca.key"; 
         string keyText = File.ReadAllText(caKeyPath);
         string pemContent = keyText
             .Replace("-----BEGIN PRIVATE KEY-----", "")
@@ -76,14 +89,12 @@ async Task<string?> CreateVpnUserAsync(string username)
         X509Certificate2 signedClientCert =
             certRequest.Create(caCertWithPrivateKey, notBefore, notAfter, new byte[] { 1, 2, 3, 4 });
         signedClientCert = new X509Certificate2(signedClientCert.Export(X509ContentType.Cert));
-
-        // Save certificate and key
+        
         string certPath = Path.Combine(outputPath, $"{username}.crt");
         string keyPath = Path.Combine(outputPath, $"{username}.key");
         File.WriteAllText(certPath, ExportCertificateToPem(signedClientCert));
         File.WriteAllText(keyPath, ExportPrivateKeyToPem(rsa));
-
-        // Generate OpenVPN config
+        
         string configContent = $"client\n" +
                                $"dev tun\n" +
                                $"proto udp\n" +
@@ -109,6 +120,29 @@ async Task<string?> CreateVpnUserAsync(string username)
         Console.WriteLine($"Exception: {ex.Message}");
         return null;
     }
+}
+
+async Task<bool> CheckPasswordAsync(string receivedHash)
+{
+    string configPath = "/etc/openvpn/clients/server_config.toml";
+
+    if (!File.Exists(configPath))
+        return false;
+
+    var content = await File.ReadAllTextAsync(configPath);
+    var model = Toml.ToModel(content) as TomlTable;
+
+    if (model?["auth"] is TomlTable auth && auth["admin_password"] is string password)
+    {
+        using var sha256 = SHA256.Create();
+        var passwordBytes = Encoding.UTF8.GetBytes(password);
+        var hashedBytes = sha256.ComputeHash(passwordBytes);
+        var calculatedHash = Convert.ToHexString(hashedBytes).ToLowerInvariant();
+
+        return receivedHash.ToLowerInvariant() == calculatedHash;
+    }
+
+    return false;
 }
 
 static string ExportCertificateToPem(X509Certificate2 certificate)
