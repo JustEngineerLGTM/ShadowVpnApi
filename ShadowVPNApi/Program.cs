@@ -15,7 +15,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
-
+await EnsureServerConfigAsync();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -28,11 +28,27 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapPost("/createvpnuser", async (string username) =>
+app.MapPost("/createvpnuser", async (string raw) =>
 {
+    // raw — строка вида "someuser=abcdef123456..."
+    var lastEq = raw.LastIndexOf('=');
+    if (lastEq <= 0 || lastEq == raw.Length-1)
+        return Results.BadRequest("Неверный формат запроса");
+
+    var username = raw[..lastEq];
+    var hash     = raw[(lastEq+1)..];
+
+    // проверяем хеш
+    if (!await CheckPasswordAsync(hash))
+        return Results.Unauthorized();
+
+    // создаём пользователя
     var result = await CreateVpnUserAsync(username);
-    return result != null ? Results.Ok(result) : Results.BadRequest("Error creating VPN user.");
+    return result != null 
+        ? Results.Ok(result) 
+        : Results.BadRequest("Error creating VPN user.");
 }).WithName("CreateVpnUser");
+
 
 app.MapGet("/getvpnconfig", async (string raw) =>
 {
@@ -130,7 +146,7 @@ async Task<bool> CheckPasswordAsync(string receivedHash)
         return false;
 
     var content = await File.ReadAllTextAsync(configPath);
-    var model = Toml.ToModel(content) as TomlTable;
+    var model = Toml.ToModel(content);
 
     if (model?["auth"] is TomlTable auth && auth["admin_password"] is string password)
     {
@@ -182,5 +198,23 @@ async Task<string?> GetVpnConfigAsync(string username)
         return null;
     }
 }
+async Task EnsureServerConfigAsync()
+{
+    var configDir = "/etc/openvpn/clients";
+    var configPath = Path.Combine(configDir, "server_config.toml");
+    if (File.Exists(configPath))
+        return;
 
+    Directory.CreateDirectory(configDir);
+
+    var table = new TomlTable
+    {
+        ["auth"] = new TomlTable
+        {
+            ["admin_password"] = "changeme"
+        }
+    };
+    var toml = Toml.FromModel(table);
+    await File.WriteAllTextAsync(configPath, toml);
+}
 app.Run();
