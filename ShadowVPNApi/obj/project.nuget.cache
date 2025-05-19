@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "xeTlHXuwIFQ=",
+  "dgSpecHash": "k/7mr2JQddY=",
   "success": true,
   "projectFilePath": "C:\\Users\\JustEngineer\\RiderProjects\\ShadowVPNApi\\ShadowVPNApi\\ShadowVPNApi.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\JustEngineer\\.nuget\\packages\\bouncycastle.netcore\\2.2.1\\bouncycastle.netcore.2.2.1.nupkg.sha512",
     "C:\\Users\\JustEngineer\\.nuget\\packages\\microsoft.aspnetcore.openapi\\9.0.3\\microsoft.aspnetcore.openapi.9.0.3.nupkg.sha512",
     "C:\\Users\\JustEngineer\\.nuget\\packages\\microsoft.bcl.cryptography\\9.0.3\\microsoft.bcl.cryptography.9.0.3.nupkg.sha512",
     "C:\\Users\\JustEngineer\\.nuget\\packages\\microsoft.extensions.apidescription.server\\6.0.5\\microsoft.extensions.apidescription.server.6.0.5.nupkg.sha512",
