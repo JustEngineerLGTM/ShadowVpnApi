@@ -1,11 +1,18 @@
 ﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Net.Http;
 
 namespace ShadowVPNApi.Services;
 
 public static class VpnService
 {
+    static async Task<string> GetPublicIpAsync()
+    {
+        using var httpClient = new HttpClient();
+        return await httpClient.GetStringAsync("https://api.ipify.org");
+    }
+
     public static async Task<string?> CreateVpnUserAsync(string username)
     {
         try
@@ -35,13 +42,13 @@ public static class VpnService
             var keyPath = Path.Combine(clientDir, $"{username}.key");
             await File.WriteAllTextAsync(crtPath, CertificateService.ExportCertificateToPem(clientCert));
             await File.WriteAllTextAsync(keyPath, CertificateService.ExportPrivateKeyToPem(rsaClient));
-
+            var ip = await GetPublicIpAsync();
             // собираем .ovpn
             var config = new StringBuilder();
             config.AppendLine("client");
             config.AppendLine("dev tun");
             config.AppendLine("proto udp");
-            config.AppendLine("remote 109.120.132.39 1194");
+            config.AppendLine($"remote {ip.Trim()} 1194");
             config.AppendLine("resolv-retry infinite");
             config.AppendLine("nobind");
             config.AppendLine("persist-key");
