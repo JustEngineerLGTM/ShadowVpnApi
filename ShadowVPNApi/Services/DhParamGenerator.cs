@@ -1,14 +1,11 @@
-﻿// Не забудьте в csproj подключить пакет:
-// <PackageReference Include="BouncyCastle.NetCore" Version="1.9.0" />
-
-using System.Text;
+﻿using System.Text;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Security;
 
-namespace ShadowVPNApi;
+namespace ShadowVPNApi.Services;
 
 static class DhParamGenerator
 {
@@ -41,4 +38,5 @@ static class DhParamGenerator
             writer.WriteLine(b64.Substring(i, Math.Min(64, b64.Length - i)));
         writer.WriteLine("-----END DH PARAMETERS-----");
     }
+    
 }
