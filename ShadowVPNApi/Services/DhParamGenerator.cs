@@ -7,7 +7,7 @@ using Org.BouncyCastle.Security;
 
 namespace ShadowVPNApi.Services;
 
-static class DhParamGenerator
+internal static class DhParamGenerator
 {
     /// <summary>
     /// Генерирует DH-параметры в PEM-формате (PKCS#3).
@@ -18,18 +18,20 @@ static class DhParamGenerator
         var generator = new DHParametersGenerator();
         generator.Init(keySizeBits, 20, new SecureRandom());
 
-        DHParameters dhParams = generator.GenerateParameters();
+        var dhParams = generator.GenerateParameters();
         // OpenSSL dhparam по умолчанию берёт g = 2
         var realParams = new DHParameters(dhParams.P, BigInteger.Two);
 
         // Формируем ASN.1-последовательность {p, g}
-        var seq = new Asn1EncodableVector();
-        seq.Add(new DerInteger(realParams.P));
-        seq.Add(new DerInteger(realParams.G));
-        byte[] derEncoded = new DerSequence(seq).GetDerEncoded();
+        var seq = new Asn1EncodableVector
+        {
+            new DerInteger(realParams.P),
+            new DerInteger(realParams.G)
+        };
+        var derEncoded = new DerSequence(seq).GetDerEncoded();
 
         // Кодируем в Base64
-        string b64 = Convert.ToBase64String(derEncoded);
+        var b64 = Convert.ToBase64String(derEncoded);
 
         // Записываем в PEM
         using var writer = new StreamWriter(outputPath, false, Encoding.ASCII);
@@ -38,5 +40,4 @@ static class DhParamGenerator
             writer.WriteLine(b64.Substring(i, Math.Min(64, b64.Length - i)));
         writer.WriteLine("-----END DH PARAMETERS-----");
     }
-    
 }

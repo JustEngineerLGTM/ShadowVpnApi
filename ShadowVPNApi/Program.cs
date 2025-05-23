@@ -4,10 +4,10 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Гарантируем, что OpenVPN настроен и созданы все необходимые файлы
+// Создаем файлы для OpenVPN
 await ServerSetup.EnsureOpenVpnServerConfigAsync();
 await ServerSetup.EnsureServerConfigAsync();
-
+builder.WebHost.UseUrls("http://*:5000");
 // Добавляем поддержку OpenAPI/Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

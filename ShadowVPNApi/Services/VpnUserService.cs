@@ -6,12 +6,14 @@ namespace ShadowVPNApi.Services;
 
 public static class VpnService
 {
+    // Получаем публичный ip текущей машины
     static async Task<string> GetPublicIpAsync()
     {
         using var httpClient = new HttpClient();
         return await httpClient.GetStringAsync("https://api.ipify.org");
     }
 
+    // Генерирует конфиг для клиента
     public static async Task<string?> CreateVpnUserAsync(string username)
     {
         try
@@ -83,6 +85,7 @@ public static class VpnService
         }
     }
 
+    // Получаем конфиг для юзера
     public static async Task<string?> GetVpnConfigAsync(string username)
     {
         var path = Path.Combine("/etc/openvpn/clients", $"{username}.ovpn");

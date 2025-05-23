@@ -6,6 +6,7 @@ using System.Text;
 
 public static class CertificateService
 {
+    // Форматирование для сертификата
     public static string ExportCertificateToPem(X509Certificate2 certificate)
     {
         var builder = new StringBuilder();
@@ -16,7 +17,7 @@ public static class CertificateService
         builder.AppendLine("-----END CERTIFICATE-----");
         return builder.ToString();
     }
-
+    // Форматирование для приватного ключа
     public static string ExportPrivateKeyToPem(RSA rsa)
     {
         var builder = new StringBuilder();
