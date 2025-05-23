@@ -32,7 +32,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // Маппинг маршрутов для VPN‑эндпоинтов
-VpnEndpoints.Map(app);
+app.MapVpnEndpoints();
 
 // Запускаем приложение
 app.Run();

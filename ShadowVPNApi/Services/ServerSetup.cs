@@ -17,31 +17,32 @@ public static class ServerSetup
 
         if (!File.Exists(confPath))
         {
-            const string template = """
-                                    port 1194
-                                    topology subnet
-                                    proto udp
-                                    user nobody
-                                    dev tun
-                                    ca /etc/openvpn/ca.crt
-                                    cert /etc/openvpn/server.crt
-                                    key /etc/openvpn/server.key
-                                    dh /etc/openvpn/dh.pem
-                                    server 10.8.0.0 255.255.255.0
-                                    push "redirect-gateway def1 bypass-dhcp"
-                                    push "dhcp-option DNS 8.8.8.8"
-                                    keepalive 10 120
-                                    auth SHA256
-                                    tls-auth /etc/openvpn/ta.key 1
-                                    tls-server
-                                    key-direction 0
-                                    persist-key
-                                    persist-tun
-                                    data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
-                                    cipher AES-256-CBC
-                                    status /var/log/openvpn-status.log
-                                    verb 3
-                                    """;
+            const string template =
+                """
+                port 1194
+                topology subnet
+                proto udp
+                user nobody
+                dev tun
+                ca /etc/openvpn/ca.crt
+                cert /etc/openvpn/server.crt
+                key /etc/openvpn/server.key
+                dh /etc/openvpn/dh.pem
+                server 10.8.0.0 255.255.255.0
+                push "redirect-gateway def1 bypass-dhcp"
+                push "dhcp-option DNS 8.8.8.8"
+                keepalive 10 120
+                auth SHA256
+                tls-auth /etc/openvpn/ta.key 1
+                tls-server
+                key-direction 0
+                persist-key
+                persist-tun
+                data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
+                cipher AES-256-CBC
+                status /var/log/openvpn-status.log
+                verb 3
+                """;
             await File.WriteAllTextAsync(confPath, template);
         }
 
@@ -116,8 +117,6 @@ public static class ServerSetup
 
             await File.WriteAllTextAsync(taKey, sb.ToString());
         }
-
-
     }
 
 

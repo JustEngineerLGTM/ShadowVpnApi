@@ -4,7 +4,7 @@ namespace ShadowVPNApi.Endpoints;
 
 public static class VpnEndpoints
 {
-    public static void Map(WebApplication app)
+    public static void MapVpnEndpoints(this WebApplication app)
     {
         app.MapPost("/createvpnuser", async (string raw) =>
         {
