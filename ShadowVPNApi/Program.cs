@@ -8,7 +8,6 @@ var builder = WebApplication.CreateBuilder(args);
 await ServerSetup.EnsureOpenVpnServerConfigAsync();
 await ServerSetup.EnsureServerConfigAsync();
 builder.WebHost.UseUrls("http://*:5000");
-// Добавляем поддержку OpenAPI/Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -17,7 +16,6 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// В режиме разработки включаем Swagger UI
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -27,12 +25,7 @@ if (app.Environment.IsDevelopment())
         options.RoutePrefix = string.Empty;
     });
 }
-
-// Перенаправляем HTTP → HTTPS
 app.UseHttpsRedirection();
-
 // Маппинг маршрутов для VPN‑эндпоинтов
 app.MapVpnEndpoints();
-
-// Запускаем приложение
 app.Run();
