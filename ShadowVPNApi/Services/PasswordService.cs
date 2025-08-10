@@ -10,8 +10,6 @@ namespace ShadowVPNApi.Services;
 
 public static class PasswordService
 {
-    public static string AdminPassword { get; set; } = "";
-
     /// <summary>
     /// Сравнивает строку с паролем из файла server_config.toml
     /// </summary>
