@@ -43,7 +43,7 @@ public static class ServerSetup
             server 10.8.0.0 255.255.255.0
             push "redirect-gateway def1 bypass-dhcp"
             push "dhcp-option DNS 8.8.8.8"
-            push "dhcp-option DNS 8.8.4.4"
+            push "dhcp-option DNS 1.1.1.1"
             keepalive 10 120
             auth SHA256
             tls-auth /etc/openvpn/ta.key 1
@@ -51,7 +51,7 @@ public static class ServerSetup
             key-direction 0
             persist-key
             persist-tun
-            data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
+            data-ciphers AES-256-CBC:AES-128-GCM:CHACHA20-POLY1305
             cipher AES-256-CBC
             status /var/log/openvpn-status.log
             verb 3
@@ -72,7 +72,12 @@ public static class ServerSetup
 
         reqCa.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
         reqCa.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(reqCa.PublicKey, false));
-        reqCa.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DataEncipherment, false));
+        reqCa.CertificateExtensions.Add(
+            new X509KeyUsageExtension(
+                X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign,
+                false
+            )
+        );
 
         var certCa = reqCa.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddYears(10));
 

@@ -61,6 +61,7 @@ public static class VpnService
             config.AppendLine("nobind");
             config.AppendLine("persist-key");
             config.AppendLine("persist-tun");
+            config.AppendLine("dhcp-option DNS 1.1.1.1");
             config.AppendLine();
             config.AppendLine("<ca>");
             config.AppendLine(await File.ReadAllTextAsync(caCrt));
