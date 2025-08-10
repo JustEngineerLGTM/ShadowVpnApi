@@ -1,6 +1,10 @@
-﻿using System.Security.Cryptography;
+﻿using System;
+using System.IO;
+using System.Net.Http;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace ShadowVPNApi.Services;
 
@@ -34,7 +38,10 @@ public static class VpnService
                 RSASignaturePadding.Pkcs1);
             var notBefore = DateTime.UtcNow;
             var notAfter = notBefore.AddYears(1);
-            var clientCert = req.Create(caWithKey, notBefore, notAfter, new byte[] { 1, 2, 3 });
+            var clientCert = req.Create(caWithKey, notBefore, notAfter, new byte[]
+            {
+                1, 2, 3
+            });
 #pragma warning disable SYSLIB0057
             clientCert = new X509Certificate2(clientCert.Export(X509ContentType.Cert));
 #pragma warning restore SYSLIB0057

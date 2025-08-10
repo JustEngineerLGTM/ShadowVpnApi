@@ -1,4 +1,6 @@
-﻿namespace ShadowVPNApi.Services;
+﻿using System;
+
+namespace ShadowVPNApi.Services;
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;

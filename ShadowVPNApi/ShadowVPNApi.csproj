@@ -16,13 +16,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Content Include="..\.dockerignore">
-        <Link>.dockerignore</Link>
-      </Content>
-    </ItemGroup>
-
-    <ItemGroup>
+      <Folder Include="Models\" />
       <Folder Include="OpenVPN\" />
+      <Folder Include="Utils\" />
     </ItemGroup>
 
 </Project>
