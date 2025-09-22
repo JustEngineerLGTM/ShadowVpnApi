@@ -1,6 +1,6 @@
 ﻿services:
   shadowvpnapi:
-    build: ./ShadowVPNApi
+    build: .
     ports:
       - "5000:8080"
       - "1194:1194/udp"
@@ -10,4 +10,6 @@
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.ip_forward=1
     restart: always
