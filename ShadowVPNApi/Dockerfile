@@ -1,8 +1,10 @@
 ﻿FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 EXPOSE 8080
+EXPOSE 1194
 USER root
 WORKDIR /app
-RUN apt-get update && apt-get install -y openvpn
+RUN apt-get update && apt-get install -y openvpn supervisor
+
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
@@ -19,4 +21,5 @@ RUN dotnet publish "./ShadowVPNApi.csproj" -c $BUILD_CONFIGURATION -o /app/publi
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT openvpn --config /etc/openvpn/server.conf & dotnet ShadowVPNApi.dll
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+CMD ["/usr/bin/supervisord", "-n"]

@@ -3,6 +3,11 @@
     build: ./ShadowVPNApi
     ports:
       - "5000:8080"
+      - "1194:1194/udp"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
     restart: always
