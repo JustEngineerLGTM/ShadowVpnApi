@@ -16,9 +16,20 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Models\" />
       <Folder Include="OpenVPN\" />
       <Folder Include="Utils\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="Dockerfile">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>
