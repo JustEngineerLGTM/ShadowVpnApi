@@ -1,5 +1,4 @@
-﻿FROM alpine:latest as base
-
+﻿FROM alpine:latest AS base
 ENV \
     APP_UID=1654 \
     ASPNETCORE_HTTP_PORTS=5000 \
