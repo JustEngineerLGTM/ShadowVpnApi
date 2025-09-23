@@ -1,6 +1,4 @@
-﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using ShadowVPNApi.Services;
+﻿using ShadowVPNApi.Services;
 
 namespace ShadowVPNApi.Endpoints;
 

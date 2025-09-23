@@ -5,6 +5,7 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <PublishAot>true</PublishAot>
     </PropertyGroup>
 
     <ItemGroup>
@@ -13,11 +14,6 @@
         <PackageReference Include="Microsoft.Bcl.Cryptography" Version="9.0.3" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="8.0.0" />
         <PackageReference Include="Tomlyn" Version="0.19.0" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="OpenVPN\" />
-      <Folder Include="Utils\" />
     </ItemGroup>
 
 </Project>

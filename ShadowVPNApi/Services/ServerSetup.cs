@@ -1,9 +1,6 @@
-﻿using System;
-using System.IO;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Threading.Tasks;
 using Tomlyn;
 using Tomlyn.Model;
 
@@ -56,6 +53,7 @@ public static class ServerSetup
             status /var/log/openvpn-status.log
             verb 3
             """;
+        Directory.CreateDirectory(Path.GetDirectoryName(ConfPath)!);
         await File.WriteAllTextAsync(ConfPath, template);
     }
 
@@ -95,7 +93,7 @@ public static class ServerSetup
         var caCrt = Path.Combine(EtcDir, "ca.crt");
         var caKey = Path.Combine(EtcDir, "ca.key");
 
-        using var caCertificate = new X509Certificate2(caCrt);
+        using var caCertificate = X509CertificateLoader.LoadCertificateFromFile(caCrt);
         var caPemKey = await File.ReadAllTextAsync(caKey);
         var base64 = caPemKey
             .Replace("-----BEGIN PRIVATE KEY-----", "")
