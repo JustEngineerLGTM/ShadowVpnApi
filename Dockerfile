@@ -1,9 +1,15 @@
 ﻿FROM alpine:latest as base
-EXPOSE 8080
+
+ENV \
+    APP_UID=1654 \
+    ASPNETCORE_HTTP_PORTS=5000 \
+    DOTNET_RUNNING_IN_CONTAINER=true \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
+EXPOSE 5000
 EXPOSE 1194/udp
 USER root
 WORKDIR /app
-RUN apk update && apk  add openvpn supervisor iptables iproute2 libc6-compat icu-libs
+RUN apk update && apk  add openvpn supervisor iptables iproute2 libc6-compat
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release

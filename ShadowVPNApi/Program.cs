@@ -9,8 +9,10 @@ var builder = WebApplication.CreateSlimBuilder(args);
 await ServerSetup.EnsureOpenVpnServerConfigAsync();
 await ServerSetup.EnsureServerConfigAsync();
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.Configure<RouteOptions>(options => options.SetParameterPolicy<RegexInlineRouteConstraint>("regex"));
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHealthChecks();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v2", new OpenApiInfo
@@ -30,4 +32,5 @@ app.UseSwaggerUI(options =>
 
 app.UseHttpsRedirection();
 app.MapVpnEndpoints();
+app.MapHealthChecks("/health");
 app.Run();
