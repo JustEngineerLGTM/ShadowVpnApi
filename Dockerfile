@@ -23,7 +23,6 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 COPY ShadowVPNApi/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY ShadowVPNApi/run-openvpn.sh /app/run-openvpn.sh
-COPY ShadowVPNApi/ovpn_env.sh /etc/openvpn/ovpn_env.sh
 RUN chmod +x /app/run-openvpn.sh /etc/openvpn/ovpn_env.sh
 
 CMD ["/usr/bin/supervisord", "-n"]
