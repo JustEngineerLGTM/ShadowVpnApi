@@ -2,7 +2,7 @@
   shadowvpnapi:
     build: .
     ports:
-      - "5000:8080"
+      - "5000:5000"
       - "1194:1194/udp"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
