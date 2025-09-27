@@ -74,7 +74,7 @@ public static class VpnService
             config.AppendLine("<tls-auth>");
             config.AppendLine(await File.ReadAllTextAsync("/etc/openvpn/ta.key"));
             config.AppendLine("</tls-auth>");
-            config.AppendLine("cipher AES-256-CBC");
+            config.AppendLine("data-ciphers AES-256-CBC");
             config.AppendLine("auth SHA256");
             config.AppendLine("verb 3");
 
